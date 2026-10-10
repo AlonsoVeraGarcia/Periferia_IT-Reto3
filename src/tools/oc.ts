@@ -56,6 +56,21 @@ function coincide(enviado: OrdenCompra, esperado: OrdenCompra): boolean {
   return sinConfirmacion(enviado) === sinConfirmacion(esperado)
 }
 
+/** Reduce la trazabilidad detallada a una categoría cerrada que el modelo copia tal cual (sin interpretarla). */
+function categorizarFuentes(t: Record<string, string>): Record<string, string> {
+  const categoria = (detalle: string) => {
+    if (detalle.startsWith("derivado")) return "derivado"
+    if (detalle.startsWith("solicitud")) return "solicitud"
+    if (detalle.startsWith("maestro")) return "maestro"
+    if (detalle.startsWith("aprobacion")) return "aprobación"
+    if (detalle.startsWith("correo")) return "correo"
+    if (detalle.startsWith("cotizacion") || detalle.startsWith("sin cotización")) return "cotización"
+    if (detalle.startsWith("constante")) return "constante"
+    return "validación"
+  }
+  return Object.fromEntries(Object.entries(t).map(([campo, detalle]) => [campo, categoria(detalle)]))
+}
+
 export const listar_casos = {
   description: "Lista los casos disponibles y, para cada uno, si ya tiene OC creada en el SAP simulado (número de OC o null).",
   args: {},
@@ -141,7 +156,7 @@ export const construir_payload = {
       const total_con_iva = r.data.paquete.solicitud.valor_total
       return json({
         ok: true,
-        data: { orden: c.data.orden, total_con_iva, fuentes: c.data.trazabilidad, trazabilidad: `out/${args.caso}/trazabilidad.json` },
+        data: { orden: c.data.orden, total_con_iva, fuentes: categorizarFuentes(c.data.trazabilidad), trazabilidad: `out/${args.caso}/trazabilidad.json` },
       })
     } catch (e) {
       return falla(e)
