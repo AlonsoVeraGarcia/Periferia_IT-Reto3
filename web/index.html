@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agente OC SAP</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f22; --muted: #6b6f76; --line: #e3e1da;
+    --accent: #1f5f8b; --ok: #2f7d4a; --warn: #a86400; --warn-bg: #fff4e0; --err: #b3261e; --tool: #f1f0eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #15171a; --panel: #1d2024; --ink: #e8e6e1; --muted: #9aa0a8; --line: #30343a;
+      --accent: #6fb3e0; --ok: #6cc28b; --warn: #f0b456; --warn-bg: #2d2416; --err: #f08b84; --tool: #23272c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; }
+  header .meta { color: var(--muted); font-size: 13px; }
+  header button { margin-left: auto; }
+  main { max-width: 920px; margin: 0 auto; padding: 16px 16px 180px; }
+  .msg { margin: 14px 0; padding: 12px 14px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); overflow-x: auto; }
+  .msg.user { background: transparent; border-style: dashed; }
+  .msg .who { font-size: 12px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+  .msg.confirm { border: 2px solid var(--warn); background: var(--warn-bg); }
+  .msg.confirm::before { content: "⚠️ Esperando tu confirmación"; display: block; font-weight: 600; color: var(--warn); margin-bottom: 6px; }
+  .tool { background: var(--tool); border-radius: 8px; margin: 6px 0; font-size: 13px; }
+  .tool summary { cursor: pointer; padding: 6px 10px; list-style: none; }
+  .tool summary::-webkit-details-marker { display: none; }
+  .tool .n { font-family: ui-monospace, Menlo, monospace; font-weight: 600; }
+  .tool .ok { color: var(--ok); } .tool .bad { color: var(--err); }
+  .tool pre { margin: 0; padding: 8px 10px; white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 320px; overflow: auto; }
+  table { border-collapse: collapse; margin: 8px 0; font-size: 14px; }
+  td, th { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+  footer { position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg); border-top: 1px solid var(--line); padding: 10px 16px 14px; }
+  .inner { max-width: 920px; margin: 0 auto; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .chips button, .confirmbar button { font-size: 13px; }
+  form { display: flex; gap: 8px; }
+  textarea { flex: 1; resize: none; height: 48px; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; }
+  button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer; font: inherit; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  .confirmbar { display: none; gap: 8px; margin-bottom: 8px; align-items: center; color: var(--warn); font-weight: 600; flex-wrap: wrap; }
+  .confirmbar.on { display: flex; }
+  .thinking { color: var(--muted); font-style: italic; }
+  .empty { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Agente de Órdenes de Compra · SAP</h1>
+  <span class="meta" id="meta">conectando…</span>
+  <button id="nueva" type="button">Nueva sesión</button>
+</header>
+<main id="chat"><p class="empty">Pide, por ejemplo: <em>Procesa la solicitud "sol-004". Muéstrame la OC como quedaría en SAP, qué validaciones pasó y cuáles no, y no la crees hasta que yo lo confirme.</em></p></main>
+<footer><div class="inner">
+  <div class="confirmbar" id="confirmbar">El agente espera tu decisión:
+    <button class="primary" data-send="Confirmo, crea la OC.">Confirmo</button>
+    <button data-send="No, cancela esta OC.">Cancelar</button>
+  </div>
+  <div class="chips" id="chips"></div>
+  <form id="form"><textarea id="txt" placeholder="Escribe tu mensaje… (Enter envía, Shift+Enter salto de línea)"></textarea><button class="primary" id="enviar">Enviar</button></form>
+</div></footer>
+<script>
+  const $ = (s) => document.querySelector(s)
+  const chat = $("#chat"), txt = $("#txt"), btn = $("#enviar"), bar = $("#confirmbar")
+  const store = { get(k) { try { return localStorage.getItem(k) } catch { return null } }, set(k, v) { try { localStorage.setItem(k, v) } catch {} } }
+  const nuevoId = () => "s_" + Math.random().toString(36).slice(2, 12) + Date.now().toString(36)
+  let sessionId = store.get("oc_session") || nuevoId(); store.set("oc_session", sessionId)
+  let accessKey = store.get("oc_key") || ""
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]))
+  function md(t) {
+    const lineas = esc(t).split("\n"); let html = "", tabla = [], lista = false
+    const inline = (s) => s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`([^`]+)`/g, "<code>$1</code>")
+    const cerrarTabla = () => { if (!tabla.length) return; const filas = tabla
+      html += "<table>" + filas.map((f, i) => "<tr>" + f.replace(/^\||\|$/g, "").split("|").map((c) => (i ? "<td>" : "<th>") + inline(c.trim()) + (i ? "</td>" : "</th>")).join("") + "</tr>").join("") + "</table>"; tabla = [] }
+    const cerrarLista = () => { if (lista) { html += "</ul>"; lista = false } }
+    for (const l of lineas) {
+      if (/^\s*\|/.test(l)) { cerrarLista(); if (!/^\s*\|[\s:|-]+\|\s*$/.test(l)) tabla.push(l.trim()); continue }
+      cerrarTabla()
+      if (/^\s*[-*] /.test(l)) { if (!lista) { html += "<ul>"; lista = true } html += "<li>" + inline(l.replace(/^\s*[-*] /, "")) + "</li>"; continue }
+      cerrarLista()
+      if (/^#{1,4} /.test(l)) html += "<p><strong>" + inline(l.replace(/^#+ /, "")) + "</strong></p>"
+      else if (l.trim()) html += "<p>" + inline(l) + "</p>"
+    }
+    cerrarTabla(); cerrarLista(); return html
+  }
+
+  function pintarTool(l) {
+    const d = document.createElement("details"); d.className = "tool"
+    d.innerHTML = `<summary><span class="${l.ok ? "ok" : "bad"}">${l.ok ? "✓" : "✗"}</span> <span class="n">${esc(l.nombre)}</span>(${esc(JSON.stringify(l.args ?? {})).slice(0, 120)}) → ${esc(l.resumen)}</summary><pre>${esc(JSON.stringify(l.resultado, null, 2))}</pre>`
+    return d
+  }
+  function pintar(ev) {
+    chat.querySelector(".empty")?.remove()
+    const div = document.createElement("div")
+    div.className = "msg " + (ev.tipo === "usuario" ? "user" : "agent") + (ev.pide_confirmacion ? " confirm" : "")
+    div.innerHTML = `<div class="who">${ev.tipo === "usuario" ? "Tú" : "Agente"}</div>`
+    if (ev.llamadas) ev.llamadas.forEach((l) => div.appendChild(pintarTool(l)))
+    const cuerpo = document.createElement("div"); cuerpo.innerHTML = ev.tipo === "usuario" ? "<p>" + esc(ev.texto) + "</p>" : md(ev.texto)
+    div.appendChild(cuerpo); chat.appendChild(div); window.scrollTo(0, document.body.scrollHeight)
+  }
+
+  async function api(ruta, opciones = {}) {
+    const r = await fetch(ruta, { ...opciones, headers: { "content-type": "application/json", ...(accessKey ? { "x-access-key": accessKey } : {}) } })
+    if (r.status === 401) { accessKey = prompt("Clave de acceso del demo:") || ""; store.set("oc_key", accessKey); return api(ruta, opciones) }
+    const data = await r.json(); if (!r.ok) throw new Error(data.error || "Error " + r.status); return data
+  }
+
+  async function enviar(texto) {
+    if (!texto.trim() || btn.disabled) return
+    pintar({ tipo: "usuario", texto }); txt.value = ""; btn.disabled = true; bar.classList.remove("on")
+    const p = document.createElement("p"); p.className = "thinking"; p.textContent = "El agente está trabajando…"; chat.appendChild(p)
+    try {
+      const r = await api("/api/chat", { method: "POST", body: JSON.stringify({ sessionId, message: texto }) })
+      p.remove(); pintar({ tipo: "agente", texto: r.reply, llamadas: r.toolCalls, pide_confirmacion: r.needsConfirmation })
+      bar.classList.toggle("on", !!r.needsConfirmation)
+    } catch (e) { p.remove(); pintar({ tipo: "agente", texto: "⚠️ " + e.message, llamadas: [] }) }
+    btn.disabled = false; txt.focus()
+  }
+
+  $("#form").addEventListener("submit", (e) => { e.preventDefault(); enviar(txt.value) })
+  txt.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(txt.value) } })
+  bar.addEventListener("click", (e) => { const t = e.target.dataset?.send; if (t) enviar(t) })
+  $("#nueva").addEventListener("click", () => { sessionId = nuevoId(); store.set("oc_session", sessionId); chat.innerHTML = ""; bar.classList.remove("on") })
+  const chips = $("#chips")
+  ;["sol-001", "sol-002", "sol-003", "sol-004", "sol-005", "sol-006"].forEach((c) => {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = "Procesa " + c
+    b.onclick = () => enviar(c === "sol-004" ? `Procesa la solicitud "${c}". Muéstrame la OC como quedaría en SAP, qué validaciones pasó y cuáles no, y no la crees hasta que yo lo confirme.` : `Procesa la solicitud ${c}`)
+    chips.appendChild(b)
+  })
+
+  ;(async () => {
+    try { const h = await api("/api/health"); $("#meta").textContent = `${h.provider} · ${h.model}` } catch { $("#meta").textContent = "sin conexión" }
+    try { const s = await api("/api/sessions/" + sessionId); s.eventos.forEach(pintar); bar.classList.toggle("on", !!(s.pendientes && s.pendientes.length)) } catch {}
+  })()
+</script>
+</body>
+</html>
