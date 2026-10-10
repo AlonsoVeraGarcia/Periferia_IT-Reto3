@@ -130,7 +130,8 @@
   $("#form").addEventListener("submit", (e) => { e.preventDefault(); enviar(txt.value) })
   txt.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(txt.value) } })
   bar.addEventListener("click", (e) => { const t = e.target.dataset?.send; if (t) enviar(t) })
-  $("#nueva").addEventListener("click", () => { sessionId = nuevoId(); store.set("oc_session", sessionId); chat.innerHTML = ""; bar.classList.remove("on") })
+  const AYUDA = chat.innerHTML
+  $("#nueva").addEventListener("click", () => { sessionId = nuevoId(); store.set("oc_session", sessionId); chat.innerHTML = AYUDA; bar.classList.remove("on") })
   const chips = $("#chips")
   ;["sol-001", "sol-002", "sol-003", "sol-004", "sol-005", "sol-006"].forEach((c) => {
     const b = document.createElement("button"); b.type = "button"; b.textContent = "Procesa " + c
