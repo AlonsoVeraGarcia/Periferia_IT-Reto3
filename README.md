@@ -2,8 +2,9 @@
 
 El agente lee el paquete de una solicitud de compra, lo valida contra los maestros (RC1–RC10), arma la OC tal como quedaría en SAP, genera la evidencia de aprobación y crea la OC en un SAP simulado. Los bloqueos no se fuerzan y las dudas se convierten en confirmaciones humanas.
 
-- **Link de prueba:** [PENDIENTE: URL pública]
-- **Clave de acceso al link:** [PENDIENTE, si se define `ACCESS_KEY`]
+- **Link de prueba:** https://agente-oc-sap-m9pc.onrender.com
+- **Clave de acceso al link:** se entrega por correo junto con este repositorio (el repositorio es público y la clave protege el crédito del modelo).
+- El plan gratuito de Render se duerme tras 15 min sin uso: la primera carga puede tardar cerca de un minuto.
 
 ## Levantar en local (un comando)
 

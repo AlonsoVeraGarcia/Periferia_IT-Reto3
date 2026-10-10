@@ -128,7 +128,10 @@ export const construir_payload = {
       await escribir(ruta, JSON.stringify(c.data.trazabilidad, null, 2))
       await escribir(path.join(rutaOut(ctx), args.caso, "payload.json"), JSON.stringify(c.data.orden, null, 2))
       const total_con_iva = r.data.paquete.solicitud.valor_total
-      return json({ ok: true, data: { orden: c.data.orden, total_con_iva, trazabilidad: `out/${args.caso}/trazabilidad.json` } })
+      return json({
+        ok: true,
+        data: { orden: c.data.orden, total_con_iva, fuentes: c.data.trazabilidad, trazabilidad: `out/${args.caso}/trazabilidad.json` },
+      })
     } catch (e) {
       return falla(e)
     }
