@@ -58,7 +58,9 @@ function actualizarPendiente(s: Sesion, nombre: string, args: unknown, r: { ok: 
   const agregar = () => {
     if (!s.pendientes.includes(caso)) s.pendientes.push(caso)
   }
-  if (nombre === "oc_validar" && r.ok && r.data?.apta && (r.data.confirmaciones as unknown[]).length > 0) agregar()
+  // Solo hay confirmación pendiente cuando el agente ya PROPUSO la OC (payload con excepciones), no por una simple validación.
+  const orden = r.data?.orden as { excepciones?: unknown[] } | undefined
+  if (nombre === "oc_construir_payload" && r.ok && (orden?.excepciones?.length ?? 0) > 0) agregar()
   if (nombre === "oc_crear" && r.ok) s.pendientes = s.pendientes.filter((c) => c !== caso)
   if (nombre === "oc_crear" && !r.ok && r.error?.startsWith("Pendiente")) agregar()
 }

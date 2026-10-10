@@ -57,12 +57,23 @@ function coincide(enviado: OrdenCompra, esperado: OrdenCompra): boolean {
 }
 
 export const listar_casos = {
-  description: "Lista los casos (solicitudes de compra) disponibles para procesar.",
+  description: "Lista los casos disponibles y, para cada uno, si ya tiene OC creada en el SAP simulado (número de OC o null).",
   args: {},
   async execute(_args: Record<string, never>, ctx: ToolCtx): Promise<string> {
     try {
       const dir = path.join(rutaFixtures(ctx), "solicitudes")
-      const casos = (await fs.readdir(dir, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name).sort()
+      const nombres = (await fs.readdir(dir, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name).sort()
+      const sap = fabricaSap(ctx)
+      const casos = []
+      for (const caso of nombres) {
+        const p = await leerPaquete(caso, ctx)
+        if (!p.ok) {
+          casos.push({ caso, solicitud_id: null, numero_oc: null, error: p.error })
+          continue
+        }
+        const oc = await sap.buscarOrdenPorReferencia(p.data.solicitud.solicitud_id)
+        casos.push({ caso, solicitud_id: p.data.solicitud.solicitud_id, numero_oc: oc?.numero_oc ?? null })
+      }
       return json({ ok: true, data: { casos } })
     } catch (e) {
       return falla(e)
