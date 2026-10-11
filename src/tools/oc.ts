@@ -156,7 +156,7 @@ export const construir_payload = {
       const total_con_iva = r.data.paquete.solicitud.valor_total
       return json({
         ok: true,
-        data: { orden: c.data.orden, total_con_iva, fuentes: categorizarFuentes(c.data.trazabilidad), trazabilidad: `out/${args.caso}/trazabilidad.json` },
+        data: { orden: c.data.orden, total_con_iva, fuentes: { ...categorizarFuentes(c.data.trazabilidad), total_con_iva: "solicitud" }, trazabilidad: `out/${args.caso}/trazabilidad.json` },
       })
     } catch (e) {
       return falla(e)

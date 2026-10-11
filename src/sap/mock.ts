@@ -43,7 +43,8 @@ export class SapMock implements SapAdapter {
   async crearOrden(orden: OrdenCompra) {
     const existentes = await this.ordenes()
     const numero_oc = String(PRIMER_NUMERO + existentes.length)
-    const fecha = new Date().toISOString().slice(0, 10)
+    // Fecha de negocio en la zona horaria de la operación (Colombia por defecto), no en UTC del servidor.
+    const fecha = new Date().toLocaleDateString("en-CA", { timeZone: process.env.ZONA_HORARIA || "America/Bogota" })
     await anexar(this.archivo, JSON.stringify({ numero_oc, fecha, orden } satisfies Registro))
     return { numero_oc, fecha }
   }
